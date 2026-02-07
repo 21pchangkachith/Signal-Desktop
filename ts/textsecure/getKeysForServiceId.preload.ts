@@ -1,6 +1,6 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-
+// import { contextBridge } from 'electron';
 import {
   ErrorCode,
   KEMPublicKey,
@@ -19,6 +19,7 @@ import { Sessions, IdentityKeys } from '../LibSignalStores.preload.js';
 import { Address } from '../types/Address.std.js';
 import { QualifiedAddress } from '../types/QualifiedAddress.std.js';
 import type { ServiceIdString } from '../types/ServiceId.std.js';
+
 import type {
   getKeysForServiceId as doGetKeysForServiceId,
   getKeysForServiceIdUnauth,
@@ -190,6 +191,15 @@ async function handleServerKeys(
       );
 
       try {
+        log.info(
+          'this is x3dh receive probably',
+          preKeyBundle,
+          protocolAddress,
+          sessionStore,
+          identityKeyStore,
+          signalProtocolStore
+        );
+        debugger; // eslint-disable-line no-debugger
         await signalProtocolStore.enqueueSessionJob(address, () =>
           processPreKeyBundle(
             preKeyBundle,
@@ -198,6 +208,25 @@ async function handleServerKeys(
             identityKeyStore
           )
         );
+        log.info(
+          'after x3dh',
+          preKeyBundle,
+          protocolAddress,
+          sessionStore,
+          identityKeyStore,
+          signalProtocolStore
+        );
+        const temp = await sessionStore.getSession(protocolAddress);
+        log.info('got session', temp);
+        // below stuff doesnt really work feel free to try
+        // contextBridge.exposeInMainWorld('preKeyBundle', preKeyBundle);
+        // contextBridge.exposeInMainWorld('protocolAddress', protocolAddress);
+        // contextBridge.exposeInMainWorld('sessionStore', sessionStore);
+        // contextBridge.exposeInMainWorld('identityKeyStore', identityKeyStore);
+        // contextBridge.exposeInMainWorld(
+        //   'signalProtocolStore',
+        //   signalProtocolStore
+        // );
       } catch (error) {
         if (
           error instanceof LibSignalErrorBase &&
