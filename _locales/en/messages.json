@@ -887,11 +887,11 @@
     "description": "Key Transparency Error Dialog > Accessibility label for loading spinner while submitting"
   },
   "icu:KeyTransparencyOnboardingDialog__Title": {
-    "messageformat": "Signal can now auto-verify key encryption",
+    "messageformat": "Signal can now auto-verify encryption",
     "description": "Key Transparency Onboarding Dialog > Title"
   },
   "icu:KeyTransparencyOnboardingDialog__Description": {
-    "messageformat": "For contacts you’re connected to by phone number, Signal can automatically confirm whether the connection is secure using a process called key transparency. For added security, you can still verify connections manually using a QR code or number.",
+    "messageformat": "For contacts you’re connected to by phone number, Signal can automatically confirm whether the connection is secure using a process called key transparency. For added security, you can still verify connections manually using a QR code or by comparing safety numbers.",
     "description": "Key Transparency Onboarding Dialog > Description"
   },
   "icu:KeyTransparencyOnboardingDialog__Continue": {
@@ -6236,9 +6236,29 @@
     "messageformat": "Hello!",
     "description": "Text of message bubble showing preview of user's member label"
   },
+  "icu:ConversationDetails--member-label--list-header": {
+    "messageformat": "Group members with labels",
+    "description": "Title for section with all the other members in the group with labels"
+  },
+  "icu:ConversationDetails--member-label--no-members": {
+    "messageformat": "No other members have labels",
+    "description": "Placeholder for 'other members with labels' section when there are zero other members with labels"
+  },
   "icu:ConversationDetails--member-label--saving": {
     "messageformat": "Saving changes...",
     "description": "Accessibility label for button with spinner as we save the user's member label."
+  },
+  "icu:ConversationDetails--member-label--error-title": {
+    "messageformat": "Can’t save member label",
+    "description": "If save of member label failed, a dialog shows. Title of dialog."
+  },
+  "icu:ConversationDetails--member-label--error-generic": {
+    "messageformat": "Check your connection and try again.",
+    "description": "If save of member label failed, a dialog shows. Description of dialog."
+  },
+  "icu:ConversationDetails--member-label--error-permissions": {
+    "messageformat": "Only admins can set member labels in this group.",
+    "description": "If Desktop discovers that permissions have changed since entering the screen, it will show this in an error dialog and exit the pane."
   },
   "icu:ConversationDetails--disappearing-messages-label": {
     "messageformat": "Disappearing messages",
@@ -6303,6 +6323,18 @@
   "icu:ConversationDetails--announcement-info": {
     "messageformat": "Choose who can send messages to the group.",
     "description": "This is the additional info for the 'who can send messages' panel"
+  },
+  "icu:ConversationDetails--label-clear-warning--title": {
+    "messageformat": "Member labels will be cleared",
+    "description": "When the user changes the 'edit group info' permission to 'Admins only', this dialog shows. Title of dialog."
+  },
+  "icu:ConversationDetails--label-clear-warning--description": {
+    "messageformat": "Changing this permission to “Only admins” will clear member labels set by non-admins in this group.",
+    "description": "When the user changes the 'edit group info' permission to 'Admins only', this dialog shows. Description text of dialog."
+  },
+  "icu:ConversationDetails--label-clear-warning--continue": {
+    "messageformat": "Continue",
+    "description": "When the user changes the 'edit group info' permission to 'Admins only', this dialog shows. Button to continue making the change."
   },
   "icu:ConversationDetails--requests-and-invites": {
     "messageformat": "Requests & Invites",
@@ -9924,7 +9956,27 @@
   },
   "icu:PreferencesDonations__privacy-modal-content": {
     "messageformat": "<paragraph>Signal does not collect or store any of your personal information when you make a donation.</paragraph><paragraph>We use Stripe as our payment processor to receive your donations. We don't access, store, or save any of the information you provide to them.</paragraph><paragraph>Signal does not and cannot connect your donation to your Signal account.</paragraph><paragraph>Thank you for your support!</paragraph>",
-    "description": "Content for the modal that explains donation privacy information"
+    "description": "(Deleted 2026/02/12) Content for the modal that explains donation privacy information"
+  },
+  "icu:PreferencesDonations__privacy-modal-intro": {
+    "messageformat": "As an independent nonprofit, Signal is committed to private messaging and calls. No ads, no trackers, no surveillance. Donate today to support Signal.",
+    "description": "Content for the modal that explains donation information"
+  },
+  "icu:PreferencesDonations__privacy-modal-list-1": {
+    "messageformat": "Get an optional badge on your profile when you donate",
+    "description": "List content item for the modal that explains donation information"
+  },
+  "icu:PreferencesDonations__privacy-modal-list-2": {
+    "messageformat": "Your privacy is our mission",
+    "description": "List content item for the modal that explains donation information"
+  },
+  "icu:PreferencesDonations__privacy-modal-list-3": {
+    "messageformat": "Signal is a 501c3 nonprofit. US donations are tax deductible.",
+    "description": "List content item for the modal that explains donation information"
+  },
+  "icu:PreferencesDonations__privacy-modal-icon-accessibility-label": {
+    "messageformat": "Heart icon in the style of the Signal logo",
+    "description": "Accessibility label for the icon showed at the top of the modal that explains donation information"
   },
   "icu:PreferencesDonations__privacy-modal-ok": {
     "messageformat": "OK",
@@ -10047,8 +10099,16 @@
     "description": "While making a donation and after entering payment details, if you try to navigate away then a dialog shows and its primary button has this text to confirm cancellation of the donation."
   },
   "icu:DonateFlow__discard-paypal-dialog-body": {
-    "messageformat": "Leaving this page will remove your PayPal information. Do you want to proceed?",
+    "messageformat": "Leaving will cancel your donation.",
     "description": "While making a donation and after selecting Paypal, if you try to navigate away then a dialog shows with this body text."
+  },
+  "icu:DonateFlow__discard-paypal-dialog-discard": {
+    "messageformat": "Leave",
+    "description": "While making a donation and after selecting PayPal, if you try to navigate away then a dialog shows and its primary button has this text to confirm cancellation of the donation."
+  },
+  "icu:DonateFlow__discard-paypal-dialog-cancel": {
+    "messageformat": "Stay on page",
+    "description": "While making a donation and after selecting PayPal, if you try to navigate away then a dialog shows and its secondary button has this text. The user will remain on the page and they can complete a donation as previously intended."
   },
   "icu:DonateFlow__continue": {
     "messageformat": "Continue",
@@ -10459,10 +10519,14 @@
   },
   "icu:WhatsNew__7.89--0": {
     "messageformat": "This update fixes a bug with text formatting while Caps Lock was enabled so it will be easier to make things bold (or italic) WHILE BEING BOLD. Thanks, <DGrothePhD></DGrothePhD>!",
-    "description": "Release notes for 7.89 release"
+    "description": "(Deleted 2026/02/12) Release notes for 7.89 release"
   },
   "icu:WhatsNew__7.89--1": {
     "messageformat": "Signal is a 501c3 nonprofit that wouldn't be possible without your support, and now you can donate via PayPal in Signal Desktop.",
-    "description": "Release notes for 7.89 release"
+    "description": "(Deleted 2026/02/12) Release notes for 7.89 release"
+  },
+  "icu:WhatsNew__7.90--0": {
+    "messageformat": "Make privacy stick with five new official sticker packs in the Signal Artist Series: \"Chug the Mouse\" by Amanda Cotan, \"Cozy Season\" by Miguel Ángel Camprubí, \"Croco's Feelings\" by Tiffany Beucher, \"My Daily Life 2\" by Plastic Thing, and \"Rocky Talk\" by Lexi Vay.",
+    "description": "Release notes for 7.90 release"
   }
 }
