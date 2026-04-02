@@ -63,6 +63,9 @@ export type StorageAccessType = {
   'auto-download-attachment': AutoDownloadAttachmentType;
   autoConvertEmoji: boolean;
   'badge-count-muted-conversations': boolean;
+  pvrfDemoPendingBasis?: Record<string, Record<string, string>>;
+  pvrfDemoLocalNonce?: Record<string, Record<string, string>>;
+  vts?:  Record<string, Record<string, string>>;
   'blocked-groups': ReadonlyArray<string>;
   'blocked-uuids': ReadonlyArray<ServiceIdString>;
   'call-ringtone-notification': boolean;
