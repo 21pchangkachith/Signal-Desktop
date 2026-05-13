@@ -38,9 +38,6 @@ import { onFailedToSendWithEndorsements } from '../util/groupSendEndorsements.pr
 import { signalProtocolStore } from '../SignalProtocolStore.preload.js';
 import { itemStorage } from './Storage.preload.js';
 
-import * as Bytes from '../Bytes.std.js';
-import { setPendingBasis } from './pvrfPendingBasisStorage.preload.js';
-
 
 const log = createLogger('getKeysForServiceId');
 
