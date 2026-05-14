@@ -1,5 +1,9 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+// import { contextBridge } from 'electron';
+
+import { getLocalStores, setLocalStores } from './pvrfLocalStoresStorage.preload.js';
+
 
 import {
   ErrorCode,
@@ -19,6 +23,7 @@ import { Sessions, IdentityKeys } from '../LibSignalStores.preload.js';
 import { Address } from '../types/Address.std.js';
 import { QualifiedAddress } from '../types/QualifiedAddress.std.js';
 import type { ServiceIdString } from '../types/ServiceId.std.js';
+
 import type {
   getKeysForServiceId as doGetKeysForServiceId,
   getKeysForServiceIdUnauth,
@@ -31,6 +36,8 @@ import { HTTPError } from '../types/HTTPError.std.js';
 import { onFailedToSendWithEndorsements } from '../util/groupSendEndorsements.preload.js';
 import { signalProtocolStore } from '../SignalProtocolStore.preload.js';
 import { itemStorage } from './Storage.preload.js';
+
+
 
 const log = createLogger('getKeysForServiceId');
 
@@ -190,6 +197,18 @@ async function handleServerKeys(
       );
 
       try {
+        log.info(
+          'this is x3dh SEND probably',
+          preKeyBundle,
+          protocolAddress,
+          sessionStore,
+          identityKeyStore,
+          signalProtocolStore
+        );
+
+        // 1) check if we already had a session before running X3DH
+        const existingSession = await sessionStore.getSession(protocolAddress);
+
         await signalProtocolStore.enqueueSessionJob(address, () =>
           processPreKeyBundle(
             preKeyBundle,
@@ -198,7 +217,51 @@ async function handleServerKeys(
             identityKeyStore
           )
         );
-      } catch (error) {
+        log.info(
+          'after x3dh',
+          preKeyBundle,
+          protocolAddress,
+          sessionStore,
+          identityKeyStore,
+          signalProtocolStore
+        );
+
+
+
+        //maybe problem if user loses their main device?
+        //end goal maybe calc for 1 device, using that data for all
+        //but would require synchronosity, doing device 1 first, then allowing others to run
+        //remove the true || to test 
+        if (deviceId == 1 || true) {
+
+          const temp = await sessionStore.getSession(protocolAddress);
+          log.info('got session', temp, device, temp?.getBobResponse);
+
+          try { log.info('VTS value', temp?.getVTS?.()); } catch (e) { log.error('error getting VTS', e); }
+          const buf = temp?.getVTS?.();
+          try {
+            const s1 = buf.vt.tau[0]
+            const s2_1 = buf.vt.tau[1][0]
+            const s2_2 = buf.vt.tau[1][1]
+
+            const h = buf.vt.h;
+            const hprime = buf.vt.hprime;
+            const tau = { c: s1, s: [s2_1, s2_2] };
+            const vt = { h, hprime, tau };
+            const vk = buf.vk;
+            const secrets = buf.x;
+            const alpha = buf.r1;
+            const beta = buf.r2;
+            const vts = { vt, vk, secrets, alpha, beta };
+
+            await setLocalStores(serviceId, deviceId, JSON.stringify(vts), 'vts');
+          } catch (err){
+            log.error('error parsing VTS', err, err.stack);
+          }
+      
+        }
+      } 
+     catch (error) {
         if (
           error instanceof LibSignalErrorBase &&
           error.code === ErrorCode.UntrustedIdentity

@@ -1,9 +1,9 @@
 // Copyright 2024 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import * as Bytes from '../Bytes.std.js';
 import lodash from 'lodash';
 import type { z } from 'zod';
-
 import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
 import * as LinkPreview from '../types/LinkPreview.std.js';
@@ -80,10 +80,12 @@ import type { LinkPreviewType } from '../types/message/LinkPreviews.std.js';
 import { getCachedSubscriptionConfiguration } from '../util/subscriptionConfiguration.preload.js';
 import { itemStorage } from '../textsecure/Storage.preload.js';
 
+
 const { isNumber } = lodash;
 
 const log = createLogger('handleDataMessage');
 
+ 
 const CURRENT_PROTOCOL_VERSION = Proto.DataMessage.ProtocolVersion.CURRENT;
 const INITIAL_PROTOCOL_VERSION = Proto.DataMessage.ProtocolVersion.INITIAL;
 

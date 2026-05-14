@@ -109,6 +109,9 @@ import type {
   SendUnpinMessageType,
 } from '../types/PinnedMessage.std.js';
 
+import { getLocalStores, setLocalStores } from './pvrfLocalStoresStorage.preload.js';
+
+
 const log = createLogger('SendMessage');
 
 export type SendIdentifierData =
@@ -1230,6 +1233,29 @@ export class MessageSender {
       ...messageOptions,
       includePniSignatureMessage,
     });
+    log.info('the proto is', proto);
+    const stringifiedProto = JSON.stringify(proto);
+    log.info('the stringified proto is', stringifiedProto);
+    log.info('if ithas a datamessage', proto.dataMessage);
+    if (proto.dataMessage) {
+      log.info('has datamessage');
+      const serviceId = messageOptions.recipients[0];
+      const bobProof = await getLocalStores(serviceId, 1, "bob_proof");
+      if (bobProof) {
+        const bobJson = JSON.parse(bobProof);
+        const bobToAlice = JSON.stringify({
+          response: {
+            pi: bobJson.response?.pi
+          }
+        })
+        proto.dataMessage.bobProof = bobToAlice;
+        log.info('the proto with injected bob proof is', bobToAlice, proto, proto.dataMessage);
+      } else {
+        proto.dataMessage.bobProof = JSON.stringify({"noBobProof": true});
+        log.info('no bob proof available for', serviceId);
+      }
+    }
+
 
     return new Promise((resolve, reject) => {
       drop(
