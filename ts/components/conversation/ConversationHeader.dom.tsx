@@ -97,7 +97,6 @@ function HeaderInfoTitle({
   }
 
     return (
-    <>
       <div className="module-ConversationHeader__header__info__title">
         <UserText text={title} />
         {isInSystemContacts({ name: name ?? undefined, type }) ? (
@@ -108,21 +107,7 @@ function HeaderInfoTitle({
           />
         ) : null}
       </div>
-
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          console.log("Button has been clicked!");
-          // TODO: add a function to actually grab SAS value
-        }}
-        className="module-ConversationHeader__header__info__button"
-      >
-        Click me for SAS
-      </button>
-    </>
   );
-  
 }
 
 export enum OutgoingCallButtonStyle {
@@ -521,6 +506,7 @@ export const ConversationHeader = memo(function ConversationHeader({
       )}
       {sasNumber != null && (
         <SASModal
+          theme={theme}
           sasValue={sasNumber}
           onClose={() => setSasNumber(null)}
           onNumbersMatch={handleSASNumbersMatch}
@@ -534,6 +520,7 @@ export const ConversationHeader = memo(function ConversationHeader({
       )}
       {showGroupSASModal && (
         <GroupSASModal
+          theme={theme}
           conversationId={conversation.id}
           members={groupMembers}
           verifiedMap={(itemStorage.get('sas-verified-conversations') ?? {}) as Record<string, boolean>}
@@ -544,6 +531,7 @@ export const ConversationHeader = memo(function ConversationHeader({
       )}
       {showMismatchWarning && (
         <MismatchWarningDialog
+          theme={theme}
           i18n={i18n}
           onConfirm={() => {
             setShowMismatchWarning(false);
@@ -1641,6 +1629,7 @@ function SASModal({
   onNumbersMismatch,
   contactName,
   i18n,
+  theme,
 }: {
   sasValue: string;
   onClose: () => void;
@@ -1648,6 +1637,7 @@ function SASModal({
   onNumbersMismatch: () => void;
   contactName: string;
   i18n: LocalizerType;
+  theme: ThemeType;
 }) {
   return (
     <ConfirmationDialog
@@ -1676,7 +1666,7 @@ function SASModal({
           gap: '8px',
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: '#1b1b1b',
+          backgroundColor: theme === 'light' ? '#f3f3f3' : '#1b1b1b',
           borderRadius: '12px',
           padding: '16px 24px',
           marginTop: '12px',
@@ -1691,6 +1681,7 @@ function SASModal({
                 width: '36px',
                 textAlign: 'center',
                 lineHeight: '1',
+                color: theme === 'light' ? '#111111' : '#ffffff',
               }}
               >
                 {digit}
@@ -1708,6 +1699,7 @@ function GroupSASModal ({
   onVerifyMember,
   onClose,
   i18n,
+  theme,
 }: {
   conversationId: string;
   members: Array<{ id: string; name: string; isBlocked: boolean }>;
@@ -1715,6 +1707,7 @@ function GroupSASModal ({
   onVerifyMember: (memberId: string) => void;
   onClose: () => void;
   i18n: LocalizerType;
+  theme: ThemeType;
 }) {
   const allVerified = members
     .filter(m => !m.isBlocked)
@@ -1759,8 +1752,10 @@ function MismatchWarningDialog ({
   i18n,
   onConfirm,
   onCancel,
+  theme,
 }: {
   i18n: LocalizerType;
+  theme: ThemeType;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
