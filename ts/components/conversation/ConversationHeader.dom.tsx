@@ -55,6 +55,7 @@ import { tw } from '../../axo/tw.dom.js';
 import { generateSafetyNumber } from '../../util/safetyNumber.preload.js';
 import { itemStorage } from '../../textsecure/Storage.preload.js';
 import { signalProtocolStore } from '../../SignalProtocolStore.preload.js';
+import { getLocalNonce } from '../../textsecure/pvrfLocalNonceStorage.preload.js';
 
 // Test SAS setting toggle
 export function isSASEnabled(): boolean {
@@ -321,12 +322,45 @@ export const ConversationHeader = memo(function ConversationHeader({
       }
     }
     // end check
+  
+  // Get real SAS instead of safety number
+  // ALWAYS include 1 because backend writes SAS there
+  const deviceIds = await signalProtocolStore.getDeviceIds({
+    ourServiceId: ourAci as any,
+    serviceId: fullConversation.serviceId as any,
+  });
 
-    const result = await generateSafetyNumber(fullConversation);
-    const total = result.numberBlocks.reduce((sum, block) => sum + parseInt(block, 10), 0) % 1000000;
-    setSasNumber(total.toString().padStart(6, '0'));
+  console.log('Device IDs:', deviceIds);
+
+  // IMPORTANT: force 1 first (this is where SAS is actually stored)
+  const candidates = [1, ...deviceIds.filter(id => id !== 1)];
+
+  let sas: string | null = null;
+
+  for (const deviceId of candidates) {
+    const value = await getLocalNonce(
+      fullConversation.serviceId,
+      deviceId,
+      'sas'
+    );
+
+    console.log(`Trying device ${deviceId}:`, value);
+
+    if (value) {
+      sas = value;
+      break;
+    }
+  }
+
+  console.log('Resolved SAS:', sas);
+
+  if (!sas) {
+    console.error('No SAS found');
+    return;
+  }
+
   } catch (err) {
-    console.error('Failed to generate safety number', err);
+    console.error('Failed to generate SAS', err);
   }
 }, [conversation]);
 
@@ -346,6 +380,10 @@ export const ConversationHeader = memo(function ConversationHeader({
       const memberName = groupMembers.find(m => m.id === memberId)?.name ?? 'Unknown';
       setSelectedMemberName(memberName);
       const total = result.numberBlocks.reduce((sum, block) => sum + parseInt(block, 10), 0) % 1000000;
+      console.log(
+        'STORE CHECK:',
+        await getLocalNonce(fullConversation.serviceId, 1, 'sas')
+      );
       setSasNumber(total.toString().padStart(6, '0'));
       setShowGroupSASModal(false);
     } catch (err) {
