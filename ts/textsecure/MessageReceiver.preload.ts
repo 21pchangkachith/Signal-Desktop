@@ -29,6 +29,7 @@ import {
   signalDecrypt,
   signalDecryptPreKey,
   SignalMessage,
+  pvrfVerify,
 } from '@signalapp/libsignal-client';
 
 import {
@@ -172,7 +173,8 @@ import {
   type MessageRequestResponseInfo,
   MessageRequestResponseSource,
 } from '../types/MessageRequestResponseEvent.std.js';
-
+import { getLocalStores, setLocalStores } from './pvrfLocalStoresStorage.preload.js';
+import { showConfirmationDialog } from './../util/showConfirmationDialog.dom.js';
 const { isBoolean, isNumber, isString, noop, omit } = lodash;
 
 const log = createLogger('MessageReceiver');
@@ -1070,6 +1072,7 @@ export default class MessageReceiver
             `${decrypted.length} decrypted envelopes, keeping ` +
             `${failed.length} failed envelopes.`
         );
+        log.info('decryptadncahce', decrypted, items)
 
         // Store both decrypted and failed unprocessed envelopes
         const unprocesseds: Array<UnprocessedType> = decrypted.map(
@@ -1468,6 +1471,7 @@ export default class MessageReceiver
     let inProgressMessageType = '';
     try {
       const content = Proto.Content.decode(plaintext);
+      log.info('decryptenvelope, content', content);
       if (!wasEncrypted && Bytes.isEmpty(content.decryptionErrorMessage)) {
         log.warn(
           `${logId}: dropping plaintext envelope without decryption error message`
@@ -1501,6 +1505,90 @@ export default class MessageReceiver
       isGroupV2 =
         Boolean(content.dataMessage?.groupV2) ||
         Boolean(content.storyMessage?.group);
+      if (content.dataMessage) 
+      {
+        const serviceId = envelope.sourceServiceId;
+        log.info('datamessage found', content.dataMessage);
+        //this is where alice would read bob's proof then call to libsignal to compute sas
+        //assuming that the proof data is sent correctly
+        const deviceId = envelope.sourceDevice ?? 1;
+        log.info("device id is ",deviceId);
+
+        let vts;
+        const vtsStr = await getLocalStores(serviceId, deviceId, 'vts');
+        vts = typeof vtsStr === 'string' ? JSON.parse(vtsStr) : vtsStr;
+
+        const bob = typeof content.dataMessage.bobProof === 'string'
+          ? JSON.parse(content.dataMessage.bobProof)
+          : content.dataMessage.bobProof;
+        console.log('the stored vts', vts);
+        console.log('the bob proof', bob);
+        //the vts and bobproof are objects/dicts of the human-readable values (not bytes)
+        //for pvrfverify as it is right now, they need to be broken back down in to the byte array
+        //or we can try to make pvrfverify work with the stuff in the objets
+        const w_bob=bob?.response?.pi?.w?.compressed;
+        const v_bob=bob?.response?.pi?.v?.compressed;
+
+        if (vts && w_bob && v_bob) {
+          console.log("entered phase 1")
+          const vk = Uint8Array.from(Object.values(vts?.vk) as number[]);
+          const x  = Uint8Array.from(Object.values(vts?.secrets) as number[]);
+          const w  = Uint8Array.from(Object.values(w_bob) as number[]);
+          const v  = Uint8Array.from(Object.values(v_bob) as number[]);
+          console.log("phase 2")
+
+          function toLE32(s: string): Uint8Array {
+            let n = BigInt(s);
+            const out = new Uint8Array(32);
+            for (let i = 0; i < 32; i++) { out[i] = Number(n & 0xffn); n >>= 8n; }
+            return out;
+          }
+
+          const alpha = toLE32(vts?.alpha);
+          const beta  = toLE32(vts?.beta);
+
+          console.log(vk,x,alpha,beta,w,v)
+
+
+          const result = pvrfVerify(vk, x, alpha, beta, w, v, );
+          const z_decoded = String.fromCharCode(...result.z);
+          console.log('storing sas', z_decoded, "which will need to be xored with the salt in", vts)
+          const saltObject = vts.salt;
+          console.log('the saltobj is', saltObject);
+          const salt = new Uint8Array(Object.values(saltObject));
+          console.log('salt is', salt);
+          const sasBytes = result.z.map((v, i) => v ^ salt[i]);
+          console.log('sasbytes is', sasBytes);
+          const sas = (((sasBytes[0] << 16) | (sasBytes[1] << 8) | sasBytes[2])) % 1000000;
+          console.log('sas is', sas)
+          await setLocalStores(serviceId, 1, sas.toString(), 'sas');
+        
+          console.log("phase 3", z_decoded)
+          log.info('PVRF verify ok:', result.ok, 'z:', result.z);
+          console.log('PVRF verify ok:', result.ok, 'z:', result.z);
+          if (!result.ok) {
+            console.error("alice could not verify bob");
+            await new Promise<void>((resolve, reject) => {
+            showConfirmationDialog({
+              dialogName: 'mitmWarningAlice',
+              noMouseClose: true,
+              onTopOfEverything: true,
+              cancelText: "Acknowledge",
+              confirmStyle: 'negative',
+              title: "⚠️ Possible Security Risk - ALICE",
+              description: `Signal could not verify the integrity of this contact.
+                You may be part of a targeted attack. 
+                Please consider verifying their identity through their safety number. 
+
+                Please contact Signal Support for more information.`,
+              okText: "Proceed anyway",
+              reject: () => reject(),
+              resolve: () => resolve(),
+            });
+          });
+          }
+        }
+      }
 
       if (
         wasEncrypted &&
@@ -1817,6 +1905,7 @@ export default class MessageReceiver
             kyberPreKeyStore
           );
         }
+        log.info('333 alternate receeive');
         return signalDecrypt(
           message,
           protocolAddress,
@@ -1913,6 +2002,7 @@ export default class MessageReceiver
       );
       return { plaintext, wasEncrypted: true };
     }
+    log.info(`decrypt/${logId}: is even looking check`);
     if (envelope.type === envelopeTypeEnum.PREKEY_MESSAGE) {
       log.info(`decrypt/${logId}: prekey message`);
       if (!identifier) {
@@ -1940,7 +2030,7 @@ export default class MessageReceiver
               signedPreKeyStore,
               kyberPreKeyStore
             )
-          ),
+          ), 
         zone
       );
       return { plaintext, wasEncrypted: true };
@@ -1951,6 +2041,63 @@ export default class MessageReceiver
         stores,
         envelope
       );
+      const sealedSenderIdentifier = envelope.sourceServiceId;
+      const protocolAddress = ProtocolAddress.new(
+        sealedSenderIdentifier,
+        envelope.sourceDevice
+      );
+      const temp = await sessionStore.getSession(protocolAddress);
+      log.info('got session', temp, temp?.getBobResponse);
+
+      const deviceId = envelope.sourceDevice ?? 1;
+      const serviceId = envelope.sourceServiceId ?? 'unknown';
+
+      let bobResponseObject = {
+        response: null,
+      };
+      try { 
+        let tempResponse = temp?.getBobResponse();
+        log.info('bob response value, z is the true sas', tempResponse); 
+        if (tempResponse.c != tempResponse.computed_c) {
+          console.log('bob has c mismatch', tempResponse.c, tempResponse.computed_c);
+          console.error('thats a mismatch');
+           await new Promise<void>((resolve, reject) => {
+            showConfirmationDialog({
+              dialogName: 'mitmWarningBob',
+              noMouseClose: true,
+              onTopOfEverything: true,
+              cancelText: "Acknowledge",
+              confirmStyle: 'negative',
+              title: "⚠️ Possible Security Risk - BOB",
+              description: `Signal could not verify the integrity of this contact.
+                You may be part of a targeted attack. 
+                Please consider verifying their identity through their safety number. 
+
+                Please contact Signal Support for more information.`,
+              okText: "Proceed anyway",
+              reject: () => reject(),
+              resolve: () => resolve(),
+            });
+          });
+        } else {
+          console.log('bob has c match', tempResponse.c, tempResponse.computed_c);
+        }
+        const sasBytes = temp?.getSAS();
+        console.log('sasbytes is', sasBytes);
+        const sas = (((sasBytes[0] << 16) | (sasBytes[1] << 8) | sasBytes[2])) % 1000000;
+        console.log("sas is", sas);
+        await setLocalStores(serviceId, 1, sas.toString(), 'sas');  
+        bobResponseObject.response = tempResponse;
+        // console.log('storing sas', tempResponse.z_decoded);
+        // console.log("but hopefully its already xored as", temp?.getSAS());
+      } catch (e) { log.error('error getting bob response', e); log.error('errorstack getting bob response', e.stack); }
+     
+      try { 
+        log.info('VTS value', temp?.getVTS());
+       } catch (e) { log.error('error getting VTS', e); }
+      log.info('setting bob proof in memory for', serviceId, deviceId, "but deviceid faked to 1");
+      await setLocalStores(serviceId, 1, JSON.stringify(bobResponseObject), "bob_proof");
+
       return { plaintext: this.#unpad(plaintext), wasEncrypted };
     }
     throw new Error('Unknown message type');
@@ -2413,6 +2560,8 @@ export default class MessageReceiver
   ): Promise<void> {
     const logId = `handleDataMessage/${getEnvelopeId(envelope)}`;
     log.info(logId);
+    log.info('envelope content', envelope, JSON.stringify(envelope));
+    log.info('data message content', msg, JSON.stringify(msg));
 
     if (getStoriesBlocked() && msg.storyContext) {
       log.info(
@@ -2589,6 +2738,7 @@ export default class MessageReceiver
       this.#handleDecryptionError(envelope, content.decryptionErrorMessage);
       return;
     }
+    log.info('the content is ', content, JSON.stringify(content));
     if (content.syncMessage) {
       await this.#handleSyncMessage(
         envelope,
