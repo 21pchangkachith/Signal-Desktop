@@ -141,6 +141,11 @@ async function handleServerKeys(
   const ourAci = itemStorage.user.getCheckedAci();
   const sessionStore = new Sessions({ ourServiceId: ourAci });
   const identityKeyStore = new IdentityKeys({ ourServiceId: ourAci });
+  log.info(
+    'PVRF FULL SERVER KEY RESPONSE',
+    JSON.stringify(response)
+  );
+
 
   await Promise.all(
     response.devices.map(async device => {

@@ -558,10 +558,10 @@ export default class AccountManager extends EventTarget {
       // We want to generate new keys both if there are too few keys, and also if we
       // have too many on the server (unlikely, but has happened due to bugs), since
       // uploading new keys _should_ replace all existing ones on the server
-      if (
-        preKeyCount < PRE_KEY_MINIMUM ||
-        preKeyCount > PRE_KEY_MAX_COUNT ||
-        forceUpdate
+      if (true
+        //preKeyCount < PRE_KEY_MINIMUM ||
+        //preKeyCount > PRE_KEY_MAX_COUNT ||
+        //forceUpdate
       ) {
         log.info(
           `${logId}: Server prekey count is ${preKeyCount}, generating a new set`
@@ -615,15 +615,26 @@ export default class AccountManager extends EventTarget {
       }
       log.info(`${logId}: Uploading with ${keySummary.join(', ')}`);
 
+      log.info('heyyy')
       const toUpload = {
         identityKey: identityKey.publicKey,
         preKeys,
         pqPreKeys,
         pqLastResortPreKey,
         signedPreKey,
+        pvrfVk: Bytes.toBase64(
+          new Uint8Array([
+            1,2,3,4,5,6,7,8,
+            9,10,11,12,13,14,15,16,
+            17,18,19,20,21,22,23,24,
+            25,26,27,28,29,30,31,32
+          ])
+        ),
       };
+      log.info(`${logId}: TEST uploading pvrfVk dummy field`);
 
       await registerKeys(toUpload, serviceIdKind);
+      log.info(`${logId}: TEST registerKeys returned successfully`);
       await this._confirmKeys(toUpload, serviceIdKind);
 
       const { count: updatedPreKeyCount, pqCount: updatedKyberPreKeyCount } =
