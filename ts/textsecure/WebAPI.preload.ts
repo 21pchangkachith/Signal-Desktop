@@ -1660,6 +1660,8 @@ const ServerKeyResponseSchema = z.object({
           signature: z.string(),
         })
         .nullish(),
+
+        pvrfVk: z.string().nullish(),
     })
   ),
   identityKey: z.string(),
@@ -1687,6 +1689,7 @@ export type ServerKeysType = {
       publicKey: Uint8Array;
       signature: Uint8Array;
     };
+    pvrfVk?: string;
   }>;
   identityKey: Uint8Array;
 };

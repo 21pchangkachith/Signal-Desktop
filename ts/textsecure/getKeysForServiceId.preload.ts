@@ -4,7 +4,7 @@
 
 import { getLocalStores, setLocalStores } from './pvrfLocalStoresStorage.preload.js';
 
-
+import * as Bytes from '../Bytes.std.js';
 import {
   ErrorCode,
   KEMPublicKey,
@@ -149,7 +149,7 @@ async function handleServerKeys(
 
   await Promise.all(
     response.devices.map(async device => {
-      const { deviceId, registrationId, pqPreKey, preKey, signedPreKey } =
+      const { deviceId, registrationId, pqPreKey, preKey, signedPreKey,pvrfVk } =
         device;
       if (devicesToUpdate != null && !devicesToUpdate.includes(deviceId)) {
         return;
@@ -189,6 +189,7 @@ async function handleServerKeys(
         signedPreKey.keyId,
         signedPreKeyObject,
         signedPreKey.signature,
+        pvrfVk ? Bytes.fromBase64(pvrfVk) : null,
         identityKey,
         pqPreKeyId,
         pqPreKeyPublic,
