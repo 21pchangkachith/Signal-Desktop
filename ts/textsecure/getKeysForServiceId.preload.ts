@@ -150,7 +150,6 @@ async function handleServerKeys(
       if (devicesToUpdate != null && !devicesToUpdate.includes(deviceId)) {
         return;
       }
-
       if (device.registrationId === 0) {
         log.info(
           `handleServerKeys/${serviceId}: Got device registrationId zero!`

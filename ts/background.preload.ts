@@ -316,6 +316,8 @@ export async function cleanupSessionResets(): Promise<void> {
 }
 
 export async function startApp(): Promise<void> {
+  log.info('page reloaded');
+  log.info('environment:', getEnvironment());
   if (window.initialTheme === ThemeType.light) {
     document.body.classList.add('light-theme');
   }
@@ -1171,6 +1173,14 @@ export async function startApp(): Promise<void> {
         signalProtocolStore.hydrateCaches(),
         loadAll(),
       ]);
+
+      (window as any).Demo = {
+        async removeSessionForServiceId(serviceId: string): Promise<void> {
+          log.info('Demo.removeSessionForServiceId', serviceId);
+          await signalProtocolStore.removeSessionsByServiceId(serviceId as any);
+        },
+      };
+
       await window.ConversationController.checkForConflicts();
     } catch (error) {
       log.error(

@@ -60,6 +60,7 @@ export type CIType = {
   getAndResetMaxAudioLevel: () => number | undefined;
 };
 
+
 export type GetCIOptionsType = Readonly<{
   deviceName: string;
   forceUnprocessed: boolean;
@@ -188,6 +189,7 @@ export function getCI({
       storyId: undefined,
     });
   }
+
 
   async function openSignalRoute(url: string) {
     strictAssert(

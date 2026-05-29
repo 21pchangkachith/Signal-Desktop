@@ -18,6 +18,7 @@ import '../preload.preload.js';
 import './phase2-dependencies.preload.js';
 import './phase3-post-signal.preload.js';
 import './phase4-test.preload.js';
+import { signalProtocolStore } from '../../SignalProtocolStore.preload.js';
 
 import type {
   CdsLookupOptionsType,
@@ -61,6 +62,18 @@ if (
   window.SignalContext.config.devTools
 ) {
   const SignalDebug = {
+    getSelectedConversationServiceId: () => {
+      const conversationId =
+        window.reduxStore.getState().conversations.selectedConversationId;
+    
+      const conversation =
+        window.ConversationController.get(conversationId);
+    
+      return conversation?.get('serviceId');
+    },
+    removeSessionForServiceId: async (serviceId: string) => {
+      await signalProtocolStore.removeSessionsByServiceId(serviceId as any);
+    },
     cdsLookup: (options: CdsLookupOptionsType) => cdsLookup(options),
     getSelectedConversation: () => {
       const conversationId =
@@ -156,6 +169,7 @@ if (
   };
 
   contextBridge.exposeInMainWorld('SignalDebug', SignalDebug);
+  
 }
 
 if (getEnvironment() === Environment.Test) {
