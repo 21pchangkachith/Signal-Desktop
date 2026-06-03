@@ -1,5 +1,6 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+import { setLocalStores } from './pvrfLocalStoresStorage.preload.js';
 
 import {
   ErrorCode,
@@ -191,6 +192,7 @@ async function handleServerKeys(
 
       try {
         await signalProtocolStore.enqueueSessionJob(address, () =>
+          //x3dh SEND
           processPreKeyBundle(
             preKeyBundle,
             protocolAddress,
@@ -198,7 +200,31 @@ async function handleServerKeys(
             identityKeyStore
           )
         );
-      } catch (error) {
+
+        const temp = await sessionStore.getSession(protocolAddress);
+        let buf = temp?.getVTS?.();
+
+        try {
+          const s1 = buf.vt.tau[0]
+          const s2_1 = buf.vt.tau[1][0]
+          const s2_2 = buf.vt.tau[1][1]
+
+          const h = buf.vt.h;
+          const hprime = buf.vt.hprime;
+          const tau = { c: s1, s: [s2_1, s2_2] };
+          const vt = { h, hprime, tau };
+          const vk = buf.vk;
+          const secrets = buf.x;
+          const alpha = buf.r1;
+          const beta = buf.r2;
+          const salt = buf.contrib_salt;
+          const vts = { vt, vk, secrets, alpha, beta, salt };
+          await setLocalStores(serviceId, deviceId, JSON.stringify(vts), 'vts');
+        } catch (err){
+          log.error('error parsing VTS', err, err.stack);
+        }
+      } 
+     catch (error) {
         if (
           error instanceof LibSignalErrorBase &&
           error.code === ErrorCode.UntrustedIdentity

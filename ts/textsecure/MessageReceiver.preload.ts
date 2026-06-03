@@ -29,6 +29,7 @@ import {
   signalDecrypt,
   signalDecryptPreKey,
   SignalMessage,
+  pvrfVerify,
 } from '@signalapp/libsignal-client';
 
 import {
@@ -172,7 +173,8 @@ import {
   type MessageRequestResponseInfo,
   MessageRequestResponseSource,
 } from '../types/MessageRequestResponseEvent.std.js';
-
+import { getLocalStores, setLocalStores, clearLocalStores } from './pvrfLocalStoresStorage.preload.js';
+import { showConfirmationDialog } from './../util/showConfirmationDialog.dom.js';
 const { isBoolean, isNumber, isString, noop, omit } = lodash;
 
 const log = createLogger('MessageReceiver');
@@ -1501,6 +1503,80 @@ export default class MessageReceiver
       isGroupV2 =
         Boolean(content.dataMessage?.groupV2) ||
         Boolean(content.storyMessage?.group);
+      if (content.dataMessage) {
+        const serviceId = envelope.sourceServiceId;
+        const deviceId = envelope.sourceDevice ?? 1;
+        const vtsStr = await getLocalStores(serviceId, deviceId, 'vts');
+        let vts = typeof vtsStr === 'string' ? JSON.parse(vtsStr) : vtsStr;
+
+        const bob = typeof content.dataMessage.bobProof === 'string'
+          ? JSON.parse(content.dataMessage.bobProof)
+          : content.dataMessage.bobProof;
+        const w_bob=bob?.response?.pi?.w?.compressed;
+        const v_bob=bob?.response?.pi?.v?.compressed;
+
+        if (vts && w_bob && v_bob) {
+
+          const vk = Uint8Array.from(Object.values(vts?.vk) as number[]);
+          const x  = Uint8Array.from(Object.values(vts?.secrets) as number[]);
+          const w  = Uint8Array.from(Object.values(w_bob) as number[]);
+          const v  = Uint8Array.from(Object.values(v_bob) as number[]);
+
+          function toLE32(s: string): Uint8Array {
+            let n = BigInt(s);
+            const out = new Uint8Array(32);
+            for (let i = 0; i < 32; i++) { out[i] = Number(n & 0xffn); n >>= 8n; }
+            return out;
+          }
+
+          const alpha = toLE32(vts?.alpha);
+          const beta  = toLE32(vts?.beta);
+
+
+
+          const result = pvrfVerify(vk, x, alpha, beta, w, v, );
+          const saltObject = vts.salt;
+          const salt = new Uint8Array(Object.values(saltObject));
+          const sasBytes = result.z.map((v, i) => v ^ salt[i]);
+          const sas = (((sasBytes[0] << 16) | (sasBytes[1] << 8) | sasBytes[2])) % 1000000;
+          await setLocalStores(serviceId, 1, sas.toString(), 'sas');
+          //await clearLocalStores(serviceId, deviceId, 'vts');
+        
+          if (!result.ok) {
+            console.error("alice could not verify bob");
+            await new Promise<void>((resolve, reject) => {
+            const sender = window.ConversationController.get(
+              envelope.sourceServiceId || envelope.source
+            );
+            let personName = sender?.format()?.name || "This Contact";
+            showConfirmationDialog({
+              dialogName: 'mitmWarningAlice',
+              noMouseClose: true,
+              onTopOfEverything: true,
+              cancelText: "Block contact",
+              confirmStyle: 'negative',
+              title: `⚠️ (A)Possible Security Risk - ${personName}`,
+              description: `Signal could not verify the integrity of ${personName}.
+                This can mean that someone is impersonating this contact.
+                You may be part of a targeted attack. 
+                
+                Please consider verifying the identity of ${personName} by comparing safety numbers.
+
+                Contact Signal Support for more information.`,
+              okText: "Proceed anyway",
+              reject: () => {
+                sender?.block();
+                return reject();
+              },
+              resolve: () => {
+                sender?.set({ removalStage: 'messageRequest' });
+                return resolve();
+              },
+            });
+          });
+          }
+        }
+      }
 
       if (
         wasEncrypted &&
@@ -1796,6 +1872,7 @@ export default class MessageReceiver
       address,
       () => {
         if (message instanceof PreKeySignalMessage) {
+          //x3dh receive
           return signalDecryptPreKey(
             message,
             protocolAddress,
@@ -1940,6 +2017,64 @@ export default class MessageReceiver
         stores,
         envelope
       );
+      const sealedSenderIdentifier = envelope.sourceServiceId;
+      const protocolAddress = ProtocolAddress.new(
+        sealedSenderIdentifier,
+        envelope.sourceDevice
+      );
+      const temp = await sessionStore.getSession(protocolAddress);
+
+      const serviceId = envelope.sourceServiceId ?? 'unknown';
+
+      let bobResponseObject = {
+        response: null,
+      };
+      try { 
+        const sasBytes = temp?.getSAS();
+        const sas = (((sasBytes[0] << 16) | (sasBytes[1] << 8) | sasBytes[2])) % 1000000;
+        let tempResponse = temp?.getBobResponse();
+        let existingSas = await getLocalStores(serviceId, 1, 'sas');  
+        let alreadyChecked = existingSas == sas.toString();
+        if (tempResponse.c != tempResponse.computed_c && !alreadyChecked) {         
+          console.error('bob has c mismatch', tempResponse.c, tempResponse.computed_c);
+           await new Promise<void>((resolve, reject) => {
+            const sender = window.ConversationController.get(
+              envelope.sourceServiceId || envelope.source
+            );
+            let personName = sender?.format()?.name || "This Contact";
+            showConfirmationDialog({
+              dialogName: 'mitmWarningBob',
+              noMouseClose: true,
+              onTopOfEverything: true,
+              cancelText: "Block contact",
+              confirmStyle: 'negative',
+              title: `⚠️ (B)Possible Security Risk - ${personName}`,
+              description: `Signal could not verify the integrity of ${personName}.
+                This can mean that someone is impersonating this contact.
+                You may be part of a targeted attack. 
+                
+                Please consider verifying the identity of ${personName} by comparing safety numbers.
+
+                Contact Signal Support for more information.`,
+              okText: "Proceed anyway",
+              reject: () => {
+                sender?.block();
+                return reject();
+              },
+              resolve: () => {
+                sender?.set({ removalStage: 'messageRequest' });
+                return resolve();
+              },
+            });
+          });
+        }
+
+        await setLocalStores(serviceId, 1, sas.toString(), 'sas');  
+        bobResponseObject.response = tempResponse;
+      } catch (e) { log.info('error getting bob response', e); log.info('errorstack getting bob response', e.stack); }
+     
+      await setLocalStores(serviceId, 1, JSON.stringify(bobResponseObject), "bob_proof");
+
       return { plaintext: this.#unpad(plaintext), wasEncrypted };
     }
     throw new Error('Unknown message type');

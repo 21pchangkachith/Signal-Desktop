@@ -1,9 +1,10 @@
 // Copyright 2018 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+// import { clearLocalStores } from './../../textsecure/pvrfLocalStoresStorage.preload.js';
 import classNames from 'classnames';
 import type { RefObject } from 'react';
-import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReadonlyDeep } from 'type-fest';
 import type { BadgeType } from '../../badges/types.std.js';
 import {
@@ -52,6 +53,14 @@ import type {
   MultipleGroupMembersWithSameTitleContactSpoofingWarning,
 } from '../../state/selectors/timeline.preload.js';
 import { tw } from '../../axo/tw.dom.js';
+import { itemStorage } from '../../textsecure/Storage.preload.js';
+import { signalProtocolStore } from '../../SignalProtocolStore.preload.js';
+import { getLocalStores } from './../../textsecure/pvrfLocalStoresStorage.preload.js';
+
+// Test SAS setting toggle
+export function isSASEnabled(): boolean {
+  return itemStorage.get('sas-enabled', true);
+}
 
 function HeaderInfoTitle({
   name,
@@ -249,6 +258,7 @@ export const ConversationHeader = memo(function ConversationHeader({
     hasCustomDisappearingTimeoutModal,
     setHasCustomDisappearingTimeoutModal,
   ] = useState(false);
+  const [currentlySASReady, setCurrentlySASReady] = useState(false);
   const [hasDeleteMessagesConfirmation, setHasDeleteMessagesConfirmation] =
     useState(false);
   const [hasLeaveGroupConfirmation, setHasLeaveGroupConfirmation] =
@@ -261,6 +271,142 @@ export const ConversationHeader = memo(function ConversationHeader({
   const [messageRequestState, setMessageRequestState] = useState(
     MessageRequestState.default
   );
+
+  const [sasNumber, setSasNumber] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [selectedMemberName, setSelectedMemberName] = useState<string | null>(null);
+  const [showGroupSASModal, setShowGroupSASModal] = useState(false);
+
+
+  const handleShowSASModal = useCallback(async () => {
+    if (conversation.type === 'group') {
+      setShowGroupSASModal(true);
+      return;
+    }
+
+    try {
+      const fullConversation = window.ConversationController.get(conversation.id)?.format();
+      if (!fullConversation || !fullConversation.serviceId) {
+        console.error('Could not find full conversation');
+        return;
+      }
+
+      const result = await getLocalStores(fullConversation.serviceId, 1, 'sas') || "";
+      const total = parseInt(result) % 1000000;
+      setSasNumber(total.toString().padStart(6, '0'));
+    } catch (err) {
+      console.error('Failed to generate SAS in modal', err);
+    }
+  }, [conversation]);
+
+  const handleVerifyMember = useCallback(async (memberId: string) => {
+    try {
+      const memberConv = window.ConversationController.get(memberId);
+      const resolvedId = memberConv?.id ?? memberId;
+
+      const fullConversation = memberConv?.format();
+      if (!fullConversation?.serviceId) {
+        console.error('Member conversation has no serviceId');
+        return;
+      }
+
+      setSelectedMemberId(resolvedId);
+      const memberName = groupMembers.find(m => m.id === memberId)?.name ?? 'Unknown';
+      setSelectedMemberName(memberName);
+      //for group conversations
+      const result = await getLocalStores(fullConversation.serviceId, 1, 'sas') || "";
+      const total = parseInt(result) % 1000000;
+      setSasNumber(total.toString().padStart(6, '0'));
+      setShowGroupSASModal(false);
+    } catch (err) {
+      console.error('Failed to generate SAS in modal', err);
+    }
+  }, []);
+
+  const [groupMembersVersion, setGroupMembersVersion] = useState(0);
+  const groupMembers = useMemo(() => {
+    if (conversation.type !== 'group') return [];
+    try {
+      const conv = window.ConversationController.get(conversation.id);
+      if (!conv) return [];
+      const ourConversationId = window.ConversationController.getOurConversationId();
+      const ourConversation = ourConversationId ? window.ConversationController.get(ourConversationId) : null;
+      const ourAci = ourConversation?.get('serviceId');
+      const ourE164 = ourConversation?.get('e164');
+
+
+      const memberIds: Array<string> = (conv.get('membersV2') ?? []).map((m: any) => m.aci ?? m.uuid ?? m.id)
+        .concat(conv.get('members') ?? [])
+        .filter((id: string, index: number, arr: Array<string>) => arr.indexOf(id) === index);
+
+      return memberIds
+        .filter((id: string) => {
+          if (id === ourConversationId) return false;
+          if (ourAci && id === ourAci) return false;
+          if (ourE164 && id === ourE164) return false;
+          const memberConv = window.ConversationController.get(id);
+          const memberServiceId = memberConv?.get('serviceId');
+          if (ourAci && ourAci === memberServiceId) return false;
+          return true;
+        })
+        .map((id: string) => {
+          const memberConv = window.ConversationController.get(id);
+          return {
+            id: memberConv?.id ?? id,
+            name: memberConv?.get('profileName') ?? memberConv?.get('name') ?? memberConv?.get('e164') ?? id ?? 'Unknown',
+            isBlocked: memberConv?.isBlocked() === true,
+          }
+        })
+      
+    } catch (err) {
+      console.error('Failed to get group members', err);
+      return [];
+    }
+  }, [conversation.id, conversation.type, groupMembersVersion]);
+
+  const [sasVerified, setSasVerified] = useState(false);
+  useEffect(() => {
+    try {
+      const verifiedMap = (itemStorage.get('sas-verified-conversations') ?? {}) as Record<string, boolean>;
+      if (conversation.type === 'group') {
+        const allVerified = groupMembers.length > 0 && groupMembers.every(m => {
+          return verifiedMap[m.id] === true;
+        });
+        setSasVerified(allVerified);
+      } else {
+        setSasVerified(verifiedMap[conversation.id] === true);
+      }
+    } catch (err) {
+      console.error('Failed to check SAS verified status', err);
+      setSasVerified(false);
+    }
+  }, [conversation.id, conversation.type, groupMembers]);
+
+  const handleSASNumbersMatch = useCallback(() => {
+    const verifiedMap = (itemStorage.get('sas-verified-conversations') ?? {}) as Record<string, boolean>;
+    const idToVerify = selectedMemberId ?? conversation.id;
+    const updatedMap = {...verifiedMap, [idToVerify]: true };
+    void itemStorage.put('sas-verified-conversations', updatedMap);
+
+    if (selectedMemberId) {
+      // group modal verification after verifying a member
+      setSelectedMemberId(null);
+      setSelectedMemberName(null);
+      setShowGroupSASModal(true);
+
+      // update right away to reflect the changes instead of doing it later
+      const allVerified = groupMembers.length > 0 && groupMembers.every(m => updatedMap[m.id] === true);
+      setSasVerified(allVerified);
+    } else {
+      // individual verification
+      setSasVerified(true);
+    }
+
+    setSasNumber(null);
+  }, [conversation.id, selectedMemberId, groupMembers]);
+
+  const [showMismatchWarning, setShowMismatchWarning] = useState(false);
+  const [mismatchMemberId, setMismatchMemberId] = useState<string | null>(null);
 
   if (hasPanelShowing) {
     return null;
@@ -321,6 +467,61 @@ export const ConversationHeader = memo(function ConversationHeader({
           }}
         />
       )}
+      {sasNumber != null && (
+        <SASModal
+          sasValue={sasNumber}
+          onClose={() => setSasNumber(null)}
+          onNumbersMatch={handleSASNumbersMatch}
+          onNumbersMismatch={() => {
+            setSasNumber(null);
+            setMismatchMemberId(selectedMemberId); // capturing the mismatched member id for group
+            setShowMismatchWarning(true);
+          }}
+          contactName={selectedMemberName ?? conversation.title}
+          i18n={i18n}
+        />
+      )}
+      {showGroupSASModal && (
+        <GroupSASModal
+          conversationId={conversation.id}
+          members={groupMembers}
+          verifiedMap={(itemStorage.get('sas-verified-conversations') ?? {}) as Record<string, boolean>}
+          onVerifyMember={handleVerifyMember}
+          onClose={() => setShowGroupSASModal(false)}
+          i18n={i18n}
+        />
+      )}
+      {showMismatchWarning && (
+        <MismatchWarningDialog
+          i18n={i18n}
+          isGroupMember={mismatchMemberId != null}
+          onConfirm={() => {
+            setShowMismatchWarning(false);
+            setSasNumber(null);
+
+            if (mismatchMemberId) {
+              const memberConv = window.ConversationController.get(mismatchMemberId);
+              memberConv?.block();
+              setGroupMembersVersion(v => v + 1); // refresh group members to reflect the update blocked status
+              setMismatchMemberId(null); 
+              setSelectedMemberId(null);
+              setSelectedMemberName(null);
+              setShowGroupSASModal(true);
+            } else {
+              onConversationBlock();
+            }
+          }}
+          onCancel={() => {
+            setShowMismatchWarning(false);
+            setMismatchMemberId(null);
+            // cancelling during group flow, go back to group modal
+            if (selectedMemberId) {
+              setShowGroupSASModal(true);
+            }
+          }}
+        />
+      )}
+
       <SizeObserver
         onSizeChange={size => {
           setIsNarrow(size.width < 500);
@@ -346,7 +547,12 @@ export const ConversationHeader = memo(function ConversationHeader({
                 onViewUserStories={onViewUserStories}
                 onViewConversationDetails={onViewConversationDetails}
                 isSignalConversation={isSignalConversation ?? false}
+                onShowSASModal={handleShowSASModal}
+                sasVerified={sasVerified}
+                currentlySASReady={currentlySASReady}
+                setCurrentlySASReady={setCurrentlySASReady}
               />
+
               {!isSmsOnlyOrUnregistered && !isSignalConversation && (
                 <OutgoingCallButtons
                   conversation={conversation}
@@ -479,6 +685,10 @@ function HeaderContent({
   isSignalConversation,
   onViewUserStories,
   onViewConversationDetails,
+  onShowSASModal,
+  sasVerified,
+  currentlySASReady,
+  setCurrentlySASReady,
 }: {
   conversation: MinimalConversation;
   badge: BadgeType | null;
@@ -489,6 +699,10 @@ function HeaderContent({
   isSignalConversation: boolean;
   onViewUserStories: () => void;
   onViewConversationDetails: () => void;
+  onShowSASModal: () => void;
+  sasVerified: boolean;
+  currentlySASReady: boolean;
+  setCurrentlySASReady: (ready: boolean) => void;
 }) {
   let onClick: undefined | (() => void);
   const { type } = conversation;
@@ -504,6 +718,14 @@ function HeaderContent({
     default:
       throw missingCaseError(type);
   }
+
+ const showSASButton = itemStorage.get('sas-enabled', true);
+ const fullConversation = window.ConversationController.get(conversation.id)?.format();
+ if (fullConversation?.serviceId) { 
+   getLocalStores(fullConversation.serviceId, 1, 'sas').then((res) => {
+    setCurrentlySASReady(res ? true : false);
+  })
+ }
 
   const avatar = (
     <span className="module-ConversationHeader__header__avatar">
@@ -565,7 +787,7 @@ function HeaderContent({
     return (
       <div className="module-ConversationHeader__header">
         {avatar}
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <button
             type="button"
             className="module-ConversationHeader__header--clickable"
@@ -573,6 +795,48 @@ function HeaderContent({
           >
             {contents}
           </button>
+
+          {showSASButton && currentlySASReady && (
+            conversation.type === 'group' ? (
+              sasVerified ? (
+                <span className="module-ConversationHeader__header__info__button">
+                  ✓ All Members SAS Verified
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onShowSASModal}
+                  className="module-ConversationHeader__header__info__button"
+                >
+                  Verify Group SAS
+                </button>
+              )
+            ) : conversation.isBlocked ? (
+              sasVerified ? (
+                <span className="module-ConversationHeader__header__info__button" style={{ color: 'gray' }}>
+                  ✓ SAS Verified but Contact is Blocked
+                </span>
+              ) : (
+                <span className="module-ConversationHeader__header__info__button" style={{ color: 'gray' }}>
+                  Not possible to verify SAS with a blocked contact
+                </span>
+              )
+            ) : (
+              sasVerified ? (
+                <span className="module-ConversationHeader__header__info__button">
+                  ✓ SAS Verified
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onShowSASModal}
+                  className="module-ConversationHeader__header__info__button"
+                >
+                  View SAS Number
+                </button>
+              )
+            )
+          )}
         </div>
       </div>
     );
@@ -581,7 +845,31 @@ function HeaderContent({
   return (
     <div className="module-ConversationHeader__header" ref={headerRef}>
       {avatar}
-      {contents}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+        <button
+          type="button"
+          className="module-ConversationHeader__header--clickable"
+          onClick={onClick}
+        >
+          {contents}
+        </button>
+
+        {showSASButton && currentlySASReady && (
+          sasVerified ? (
+            <span className="module-ConversationHeader__header__info__button">
+              ✓ SAS Verified
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onShowSASModal}
+              className="module-ConversationHeader__header__info__button"
+            >
+              View SAS Number
+            </button>
+          )
+        )}
+      </div>
     </div>
   );
 }
@@ -679,6 +967,29 @@ function HeaderDropdownMenuContent({
 
   const muteTitle = <span>{i18n('icu:muteNotificationsTitle')}</span>;
   const disappearingTitle = <span>{i18n('icu:disappearingMessages')}</span>;
+  // This could be useful to someone else for debugging
+  // const onResetSession = (() => {
+  //   window?.SignalDebug?.removeSessionForServiceId(
+  //     window?.SignalDebug?.getSelectedConversationServiceId()
+  //   )
+    
+  //   const fullConversation = window.ConversationController.get(conversation.id)?.format();
+  //   let stringServiceId = fullConversation?.serviceId?.toString() || '';
+  //   clearLocalStores(stringServiceId, undefined, 'sas');
+  //   clearLocalStores(stringServiceId, undefined, 'vts');
+  //   clearLocalStores(stringServiceId, undefined, 'bob_proof');
+  //   const updatedMap = itemStorage.get('sas-verified-conversations');
+  //   if (updatedMap){
+  //     const memberConv = window.ConversationController.get(stringServiceId);
+  //     const resolvedId = memberConv?.id || stringServiceId;
+  //     updatedMap[resolvedId] = false;
+  //     void itemStorage.put('sas-verified-conversations', updatedMap);
+  //   }
+
+
+  //   onConversationDeleteMessages();
+  // })
+
 
   if (isSignalConversation) {
     const isMuted =
@@ -774,6 +1085,12 @@ function HeaderDropdownMenuContent({
     <AxoDropdownMenu.Content>
       {!conversation.acceptedMessageRequest && (
         <>
+          {/* <AxoDropdownMenu.Item
+              symbol="signal-logo"
+              onSelect={onResetSession}
+            >
+            {"(DEBUG) Reset X3DH Session"}
+          </AxoDropdownMenu.Item> */}
           {!conversation.isBlocked && (
             <AxoDropdownMenu.Item symbol="block" onSelect={onConversationBlock}>
               {i18n('icu:ConversationHeader__MenuItem--Block')}
@@ -808,6 +1125,12 @@ function HeaderDropdownMenuContent({
       )}
       {conversation.acceptedMessageRequest && (
         <>
+          {/* <AxoDropdownMenu.Item
+              symbol="signal-logo"
+              onSelect={onResetSession}
+            >
+            {"(DEBUG) Reset X3DH Session"}
+          </AxoDropdownMenu.Item> */}
           {disableTimerChanges ? null : (
             <AxoDropdownMenu.Sub>
               <AxoDropdownMenu.SubTrigger symbol="timer">
@@ -1327,4 +1650,152 @@ function MultipleGroupMembersWithSameTitleWarning(props: {
       />
     </TimelineWarning>
   );
+}
+
+function SASModal({
+  sasValue,
+  onClose,
+  onNumbersMatch,
+  onNumbersMismatch,
+  contactName,
+  i18n,
+}: {
+  sasValue: string;
+  onClose: () => void;
+  onNumbersMatch: () => void;
+  onNumbersMismatch: () => void;
+  contactName: string;
+  i18n: LocalizerType;
+}) {
+  return (
+    <ConfirmationDialog
+      dialogName="ConversationHeader.SASModal"
+      title="SAS Number"
+      i18n={i18n}
+      onClose={onClose}
+      cancelText='Close'
+      actions={[
+        {
+          text: 'Numbers Match',
+          action: onNumbersMatch,
+          style: 'affirmative',
+        },
+        {
+          text: 'Numbers Mismatch',
+          action: onNumbersMismatch,
+          style: 'negative',
+        }
+      ]}
+    >
+      <div className="module-ConversationHeader__SASModal__content">
+        <p>  {(sasValue == "000NaN") ? `SAS Unknown: Message and receive a response from ${contactName} to generate your SAS`  : `Verify your SAS with ${contactName}:`} </p>
+        <div
+        className="module-ConversationHeader__SASModal-backdrop">
+          {sasValue.replace(/\s/g, '').split('').map((digit, index) => (
+            <span 
+              key={index}
+              style={{
+                fontSize: '32px',
+                fontWeight: 'bold',
+                fontFamily: 'monospace',
+                width: '36px',
+                textAlign: 'center',
+                lineHeight: '1',
+              }}
+              >
+                {digit}
+              </span>
+          ))}
+        </div>
+      </div>
+    </ConfirmationDialog>
+  )
+}
+
+function GroupSASModal ({
+  members,
+  verifiedMap,
+  onVerifyMember,
+  onClose,
+  i18n,
+}: {
+  conversationId: string;
+  members: Array<{ id: string; name: string; isBlocked: boolean }>;
+  verifiedMap: Record<string, boolean>;
+  onVerifyMember: (memberId: string) => void;
+  onClose: () => void;
+  i18n: LocalizerType;
+}) {
+  const allVerified = members.length > 0 && members.every(m => verifiedMap[m.id] === true);
+
+  return (
+    <ConfirmationDialog
+      dialogName="ConversationHeader.GroupSASModal"
+      title="Group SAS Verification"
+      i18n={i18n}
+      onClose={onClose}
+      cancelText='Close'
+      actions={[]}
+    >
+      <p>
+        {allVerified
+          ? '✓ All members verified'
+          : 'Verify SAS with each member:'}
+      </p>
+      {members.map(member => (
+        <div key={member.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span>{member.name}</span>
+          {member.isBlocked ? (
+            <span style={{ color: 'gray' }}>Blocked</span>
+          ) : verifiedMap[member.id] ? (
+            <span style={{ color: 'green' }}>✓ Verified</span>
+          ) : (
+            <button
+              type='button'
+              onClick={() => onVerifyMember(member.id)}
+            >
+              Verify
+            </button>
+          )}
+        </div>
+      ))}
+    </ConfirmationDialog>
+  )
+}
+
+function MismatchWarningDialog ({
+  i18n,
+  onConfirm,
+  onCancel,
+  isGroupMember = false,
+}: {
+  i18n: LocalizerType;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isGroupMember?: boolean;
+}) {
+  return (
+    <ConfirmationDialog
+      dialogName='ConversationHeader.MismatchWarning'
+      title='⚠️ Possible Security Risk'
+      i18n={i18n}
+      onClose={onCancel}
+      cancelText='Go Back'
+      actions={[
+        {
+          text: isGroupMember ? 'Yes, Block This Member' : 'Yes, Block This Contact',
+          action: onConfirm,
+          style: 'negative',
+        }
+      ]}
+    >
+      <p>
+        If the numbers do not match, someone may be intercepting your messages.
+        Are you sure you want to block this contact?
+      </p>
+      <p>
+        This action will prevent you from sending or receiving messages from this person.
+      </p>
+    </ConfirmationDialog>
+  )
 }

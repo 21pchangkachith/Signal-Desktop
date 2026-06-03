@@ -63,6 +63,7 @@ export type StorageAccessType = {
   'auto-download-attachment': AutoDownloadAttachmentType;
   autoConvertEmoji: boolean;
   'badge-count-muted-conversations': boolean;
+  pvrfLocalStore?: Record<string, Record<string, string>>;
   'blocked-groups': ReadonlyArray<string>;
   'blocked-uuids': ReadonlyArray<ServiceIdString>;
   'call-ringtone-notification': boolean;
@@ -71,6 +72,8 @@ export type StorageAccessType = {
   lastCallQualityFailureSurveyTime: number;
   cqsTestMode: boolean;
   'hide-menu-bar': boolean;
+  'sas-enabled': boolean; // SAS config key
+  'sas-verified-conversations': Record<string, boolean>;
   'incoming-call-notification': boolean;
   'notification-draw-attention': boolean;
   'notification-setting': NotificationSettingType;

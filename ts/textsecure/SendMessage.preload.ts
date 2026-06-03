@@ -109,6 +109,7 @@ import type {
   SendUnpinMessageType,
 } from '../types/PinnedMessage.std.js';
 
+import { getLocalStores } from './pvrfLocalStoresStorage.preload.js';
 const log = createLogger('SendMessage');
 
 export type SendIdentifierData =
@@ -1230,6 +1231,23 @@ export class MessageSender {
       ...messageOptions,
       includePniSignatureMessage,
     });
+    if (proto.dataMessage) {
+      const serviceId = messageOptions.recipients[0];
+      let bobProof = await getLocalStores(serviceId, 1, "bob_proof");
+      //this means that currently all bob messages are appended with the pvrf value + proof
+      //this should be fixed to only the extra handshake
+      if (bobProof) { 
+        const bobJson = JSON.parse(bobProof);
+        const bobToAlice = JSON.stringify({
+          response: {
+            pi: bobJson.response?.pi
+          }
+        })
+        proto.dataMessage.bobProof = bobToAlice;
+        //await clearLocalStores(serviceId, 1, "bob_proof");
+      }
+    }
+
 
     return new Promise((resolve, reject) => {
       drop(
