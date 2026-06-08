@@ -21,11 +21,10 @@ This project implements a deniable authentication extension for Signal Desktop u
 We keep the `main` branch clean in anticipation of a potential upstream pull request or design proposal to Signal. Active development is spread across feature branches. This project spans two forked repositories:
 
 ### [Signal Desktop](https://github.com/21pchangkachith/Signal-Desktop) (TypeScript & Electron Client Application)
-- `sas-ui` branch - SAS modal UI (Mary + Minh)
-- ?
+- `ts\components\conversation\ConversationHeader.dom.tsx branch` - SAS modal UI
 
 ### [libsignal](https://github.com/21pchangkachith/libsignal) (Rust Cryptographic Library)
-- ?
+- protocol.rs - Includes modifications to initialize_alice_session and initialize_bob_session to compute the extension to the protocol cleanly. Also includes pvrf_verify for the final step to the extension.
 
 ## Team Members
 
@@ -57,7 +56,7 @@ Refer to Signal's [CONTRIBUTING.md](https://github.com/signalapp/Signal-Desktop/
 
 ## Local Instructions
 
-?
+Copy `config/local-production.json` content to `config/production.json`
 
 ## Testing
 
@@ -70,12 +69,14 @@ Since the SAS verification functions are implemented as React hooks inside `Conv
 
 - `isIndividualSasVerified(conversationId, verifiedMap)` - checks if a 1:1 conversation has been SAS verified
 - `isGroupSasVerified(members, verifiedMap)` - checks if all members in a group conversation have been SAS verified
-- `markMemberVerified(memberId, verifiedMap)` - returns a new verified map with the given member marked as verified (immutable, does not mutate original)
-- ?
-- ?
+- `markMemberVerified(memberId, verifiedMap)` - returns a new verified map with the given member marked as verified
 
 #### Running Tests
 
+Run our tests as well as Signal's existing tests by using:
+`pnpm test`
+
+Run just our tests:
 `pnpm mocha --require ts-node/register ts/test-node/conversations/ConversationHeader_SAS_test.node.ts`
 
 ### libsignal Unit Tests
@@ -95,7 +96,7 @@ Run our tests as well as Signal's existing tests by using:
 
 ## Deployment
 
-?
+Not applicable to our project since we are already using Signal application that is already hosted by Signal Server.
 
 ## Demo Video
 
@@ -103,13 +104,21 @@ Run our tests as well as Signal's existing tests by using:
 
 ## Known Issues
 
-- Windows OS cannot build libsignal
-- ?
+- 1 / 2^20 chance for SAS codes to accidentally match
+- Bob/Receiver attaches his proof to every message
+- Arithmetic computed on an Edwards Curve can require signage changes since Signal expects all points to lie over the positive axis.
+- Protocol cannot be built or tested on Windows OS
 
 ## Future Work
 
-- Formal Security Verification
-- ?
+### Upstream Integration into Signal
+
+The protocol implementation, along with extensive testing and validation code, has been completed for both libsignal and Signal Desktop. Pull requests have been created to contribute these changes to the Signal project. The next step is review by the Signal development team, whose feedback would guide any further refinements required for integration. If accepted, the protocol could be incorporated into Signal's official releases, enabling SAS-based verification for all users without requiring modified clients.
+
+### Mobile Platform Support
+
+The current implementation focuses exclusively on Signal Desktop. Extending the protocol to Signal's Android and iOS applications would be the next step, ensuring that the verification mechanism is available across all major platforms and enabling a consistent user experience for each device type.
+
 
 # Signal Desktop - Original
 
