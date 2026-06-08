@@ -45,9 +45,7 @@ We keep the `main` branch clean in anticipation of a potential upstream pull req
 
 ### libsignal
 
-- ?
-- ?
-- ?
+- protocol.rs - Includes modifications to initialize_alice_session and initialize_bob_session to compute the extension to the protocol cleanly. Also includes pvrf_verify for the final step to the extension.
 
 ## Architecture
 
@@ -80,13 +78,20 @@ Since the SAS verification functions are implemented as React hooks inside `Conv
 
 `pnpm mocha --require ts-node/register ts/test-node/conversations/ConversationHeader_SAS_test.node.ts`
 
-### libsignal Unit Tests (?)
+### libsignal Unit Tests
 
-#### ?
+Our unit tests for the protocol are located in `libsignal/rust/protocol/tests/session.rs`
+
+#### libsignal invidual tests
+
+- `test_pvrf_mitm_sender_receive_step_resealing()` - Check if the MITM attack can be detected via mismatching SAS and if the protocol works correctly by matching SAS with the attacker
+- `test_pvrf_mitm_verify_step_forwarding()` - Check if the MITM attack can be detected on the initiator end per the protocol
+- `test_pvrf_mitm_eval_step_forwarding()` -  Check if the MITM attack can be detected on the receiver end per the protocol
 
 #### Running Tests
 
-`?`
+Run our tests as well as Signal's existing tests by using:
+`cargo test`
 
 ## Deployment
 
