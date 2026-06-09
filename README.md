@@ -24,7 +24,7 @@ We keep the `main` branch clean in anticipation of a potential upstream pull req
 - `ts\components\conversation\ConversationHeader.dom.tsx branch` - SAS modal UI
 
 ### [libsignal](https://github.com/21pchangkachith/libsignal) (Rust Cryptographic Library)
-- protocol.rs - Includes modifications to initialize_alice_session and initialize_bob_session to compute the extension to the protocol cleanly. Also includes pvrf_verify for the final step to the extension.
+- `protocol.rs` - Includes modifications to initialize_alice_session and initialize_bob_session to compute the extension to the protocol cleanly. Also includes pvrf_verify for the final step to the extension.
 
 ## Team Members
 
@@ -52,7 +52,8 @@ The system extends Signal's existing X3DH + PQXDH protocol with a PVRF-based SAS
 
 ## Setup Instructions
 
-Refer to Signal's [CONTRIBUTING.md](https://github.com/signalapp/Signal-Desktop/blob/main/CONTRIBUTING.md) for setup instructions.
+Refer to Signal Desktop's [CONTRIBUTING.md](https://github.com/signalapp/Signal-Desktop/blob/main/CONTRIBUTING.md) for setup instructions.
+Refer libsignal's [README.md](https://github.com/21pchangkachith/libsignal/blob/main/README.md) for setup instructions.
 
 ## Local Instructions
 
@@ -96,11 +97,11 @@ Run our tests as well as Signal's existing tests by using:
 
 ## Deployment
 
-Not applicable to our project since we are already using Signal application that is already hosted by Signal Server.
+Not applicable to our project since we are using Signal application that is already hosted by Signal Server.
 
 ## Demo Video
 
-?
+[Google Drive Link](https://drive.google.com/file/d/10shTjPnrInG-HOrC2RwkjoLOn8ui6QH8/view)
 
 ## Known Issues
 
